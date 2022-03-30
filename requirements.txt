@@ -1,5 +1,8 @@
 datasets
 jupyter
 numpy
-tensorflow
+pandas
+sentencepiece
+torch
+tqdm
 transformers
