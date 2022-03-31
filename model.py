@@ -30,9 +30,9 @@ def train_classifier(dataset):
         "torch", columns=['input_ids', 'attention_mask', 'labels'])
 
     train_dataloader = DataLoader(
-        tokenized_dataset["train"], shuffle=True, batch_size=8)
+        tokenized_dataset["train"].select(range(10000)), shuffle=True, batch_size=32)
 
-    eval_dataloader = DataLoader(tokenized_dataset["test"], batch_size=8)
+    eval_dataloader = DataLoader(tokenized_dataset["test"].select(range(10000)), batch_size=32)
 
     model = RobertaForSequenceClassification.from_pretrained(
         "roberta-base", num_labels=3)
@@ -117,9 +117,9 @@ def train_explanator(dataset):
     tokenized_dataset.set_format("torch")
 
     train_dataloader = DataLoader(
-        tokenized_dataset["train"], shuffle=True, batch_size=8)
+        tokenized_dataset["train"].select(range(10000)), shuffle=True, batch_size=32)
 
-    eval_dataloader = DataLoader(tokenized_dataset["test"], batch_size=8)
+    eval_dataloader = DataLoader(tokenized_dataset["test"].select(range(10000)), batch_size=32)
 
     optimizer = AdamW(explanation_model.parameters(), lr=5e-5)
 
