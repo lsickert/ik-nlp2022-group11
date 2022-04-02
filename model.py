@@ -25,7 +25,7 @@ def train_classifier(dataset):
         return tokens
 
     tokenized_dataset = dataset["train"].map(
-        tokenize, batched=True, load_from_cache_file=False, num_proc=4)
+        tokenize, batched=True, load_from_cache_file=False, num_proc=4, remove_columns=dataset["train"].column_names)
     tokenized_dataset.set_format(
         "torch", columns=['input_ids', 'attention_mask', 'labels'])
 
@@ -80,7 +80,7 @@ def evaluate_classifier(dataset):
         return tokens
 
     tokenized_dataset = dataset["test"].map(
-        tokenize, batched=True, load_from_cache_file=False, num_proc=4)
+        tokenize, batched=True, load_from_cache_file=False, num_proc=4, remove_columns=dataset["test"].column_names)
     tokenized_dataset.set_format(
         "torch", columns=['input_ids', 'attention_mask', 'labels'])
 
@@ -142,8 +142,8 @@ def train_explanator(dataset):
         processed["inputs_embeds"] = encoder_output[0].cpu().detach().numpy()
         return processed
 
-    tokenized_dataset = dataset["train"].select(range(64)).map(
-        tokenize, batched=True, load_from_cache_file=False)
+    tokenized_dataset = dataset["train"].map(
+        tokenize, batched=True, batch_size=32, load_from_cache_file=False, remove_columns=dataset["train"].column_names)
     tokenized_dataset.set_format(
         "torch", columns=['encoder_hidden_states', 'labels', "inputs_embeds"])
     

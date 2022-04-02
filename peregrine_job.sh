@@ -18,4 +18,6 @@ module load PyTorch/1.6.0-fosscuda-2019b-Python-3.7.4
 
 source /data/$USER/.envs/ik_nlp/bin/activate
 
+export HF_DATASETS_CACHE="/scratch/$USER/.cache/huggingface/datasets"
+
 python -u main.py
