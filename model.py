@@ -8,7 +8,7 @@ from torch.optim import AdamW
 
 from tqdm.auto import tqdm
 
-from datasets import load_metric
+from sklearn.metrics import classification_report
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -20,19 +20,17 @@ def train_classifier(dataset):
 
     def tokenize(examples):
         tokens = tokenizer(examples["premise_hypothesis"],
-                           padding="max_length", max_length=512, truncation=True)
+                           padding="max_length", max_length=250, truncation=True)
         tokens["labels"] = examples["label"]
         return tokens
 
-    tokenized_dataset = dataset.map(
+    tokenized_dataset = dataset["train"].map(
         tokenize, batched=True, load_from_cache_file=False, num_proc=4)
     tokenized_dataset.set_format(
         "torch", columns=['input_ids', 'attention_mask', 'labels'])
 
     train_dataloader = DataLoader(
-        tokenized_dataset["train"].select(range(10000)), shuffle=True, batch_size=32)
-
-    eval_dataloader = DataLoader(tokenized_dataset["test"].select(range(10000)), batch_size=32)
+        tokenized_dataset, shuffle=True, batch_size=32)
 
     model = RobertaForSequenceClassification.from_pretrained(
         "roberta-base", num_labels=3)
@@ -64,9 +62,42 @@ def train_classifier(dataset):
             optimizer.zero_grad()
             progress_bar.update(1)
 
-    metric = load_metric("accuracy")
+    __check_dir_exists("models")
+
+    model.save_pretrained("./models/classifier")
+
+    evaluate_classifier(dataset)
+
+
+def evaluate_classifier(dataset):
+
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    def tokenize(examples):
+        tokens = tokenizer(examples["premise_hypothesis"],
+                           padding="max_length", max_length=250, truncation=True)
+        tokens["labels"] = examples["label"]
+        return tokens
+
+    tokenized_dataset = dataset["test"].map(
+        tokenize, batched=True, load_from_cache_file=False, num_proc=4)
+    tokenized_dataset.set_format(
+        "torch", columns=['input_ids', 'attention_mask', 'labels'])
+
+    eval_dataloader = DataLoader(
+        tokenized_dataset, batch_size=32)
+
+    model = RobertaForSequenceClassification.from_pretrained(
+        "./models/classifier", num_labels=3)
+
+    model.to(device)
 
     model.eval()
+
+    progress_bar = tqdm(range(len(eval_dataloader)))
+
+    nli_pred = []
+    nli_gold = []
 
     for batch in eval_dataloader:
 
@@ -78,15 +109,13 @@ def train_classifier(dataset):
 
         logits = outputs.logits
 
-        predictions = torch.argmax(logits, dim=-1)
+        nli_pred.extend(torch.argmax(logits, dim=-1))
 
-        metric.add_batch(predictions=predictions, references=batch["labels"])
+        nli_gold.extend(batch["labels"])
 
-    metric.compute()
+        progress_bar.update(1)
 
-    __check_dir_exists("models")
-
-    model.save_pretrained("./models/classifier")
+    print(classification_report(y_pred=nli_pred, y_true=nli_gold, target_names=["entailment", "neutral", "contradiction"]))
 
 
 def train_explanator(dataset):
@@ -97,29 +126,44 @@ def train_explanator(dataset):
         "./models/classifier", num_labels=3)
     classifier_model.to(device)
 
-    explanation_model = RobertaForCausalLM.from_pretrained(
-        "roberta-base", is_decoder=True)
-    explanation_model.to(device)
-
     def tokenize(examples):
         processed = {}
         tokens = tokenizer(examples["premise_hypothesis"], padding="max_length",
-                           max_length=512, truncation=True, return_tensors="pt")
+                           max_length=250, truncation=True, return_tensors="pt")
 
         processed["labels"] = tokenizer(examples["explanation_1"], padding="max_length",
-                                        max_length=512, truncation=True, return_tensors="pt")["input_ids"]
-        processed["encoder_hidden_states"] = classifier_model(
-            **tokens, output_hidden_states=True)["hidden_states"][-1]
+                                        max_length=250, truncation=True)["input_ids"]
+        
+        tokens = {k: v.to(classifier_model.device) for k, v in tokens.items()}
+
+        encoder_output =  classifier_model(
+            **tokens, output_hidden_states=True)["hidden_states"]
+        processed["encoder_hidden_states"] = encoder_output[-1].cpu().detach().numpy()
+        processed["inputs_embeds"] = encoder_output[0].cpu().detach().numpy()
         return processed
 
-    tokenized_dataset = dataset.map(
-        tokenize, batched=True, load_from_cache_file=False, num_proc=4)
-    tokenized_dataset.set_format("torch")
+    tokenized_dataset = dataset["train"].select(range(64)).map(
+        tokenize, batched=True, load_from_cache_file=False)
+    tokenized_dataset.set_format(
+        "torch", columns=['encoder_hidden_states', 'labels', "inputs_embeds"])
+    
+    def collator(batch):
+        new_batch = {}
+        for sample in batch:
+            sample["encoder_hidden_states"] = torch.stack(sample["encoder_hidden_states"])
+            sample["inputs_embeds"] = torch.stack(sample["inputs_embeds"])
+
+        new_batch["labels"] = torch.stack([s["labels"] for s in batch])
+        new_batch["encoder_hidden_states"] = torch.stack([s["encoder_hidden_states"] for s in batch])
+        new_batch["inputs_embeds"] = torch.stack([s["inputs_embeds"] for s in batch])
+        return new_batch
 
     train_dataloader = DataLoader(
-        tokenized_dataset["train"].select(range(10000)), shuffle=True, batch_size=32)
+        tokenized_dataset, shuffle=True, batch_size=32, collate_fn=collator)
 
-    eval_dataloader = DataLoader(tokenized_dataset["test"].select(range(10000)), batch_size=32)
+    explanation_model = RobertaForCausalLM.from_pretrained(
+        "roberta-base", is_decoder=True, add_cross_attention=True)
+    explanation_model.to(device)
 
     optimizer = AdamW(explanation_model.parameters(), lr=5e-5)
 
@@ -146,26 +190,6 @@ def train_explanator(dataset):
             lr_scheduler.step()
             optimizer.zero_grad()
             progress_bar.update(1)
-
-    metric = load_metric("accuracy")
-
-    explanation_model.eval()
-
-    for batch in eval_dataloader:
-
-        batch = {k: v.to(device) for k, v in batch.items()}
-
-        with torch.no_grad():
-
-            outputs = explanation_model(**batch)
-
-        logits = outputs.logits
-
-        predictions = torch.argmax(logits, dim=-1)
-
-        metric.add_batch(predictions=predictions, references=batch["labels"])
-
-    metric.compute()
 
     __check_dir_exists("models")
 

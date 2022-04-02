@@ -2,20 +2,16 @@ from datasets import load_dataset
 
 text_labels = ["entailment", "neutral", "contradiction"]
 
-
 def add_columns(row):
-    row["premise"] = '[CLS] ' + row["premise"] + ' [SEP] '
-    row["hypothesis"] = row["hypothesis"] + ' [SEP]'
-    row["standalone_hypothesis"] = '[CLS] ' + row["hypothesis"] + ' [SEP] '
     row["text_label"] = text_labels[row["label"]]
-    row["premise_hypothesis"] = f'{row["premise"]} {row["hypothesis"]}'
-    row["label_explanation_1"] = f'{row["text_label"]}: {row["explanation_1"]}'
+    row["premise_hypothesis"] = f'{row["premise"]}</s>{row["hypothesis"]}'
+    row["label_explanation_1"] = f'{row["text_label"]} {row["explanation_1"]}'
 
     if len(row["explanation_2"]) > 0:
-        row["label_explanation_2"] = f'{row["text_label"]}: {row["explanation_2"]}'
+        row["label_explanation_2"] = f'{row["text_label"]} {row["explanation_2"]}'
 
     if len(row["explanation_3"]) > 0:
-        row["label_explanation_3"] = f'{row["text_label"]}: {row["explanation_3"]}'
+        row["label_explanation_3"] = f'{row["text_label"]} {row["explanation_3"]}'
 
     return row
 
