@@ -9,3 +9,5 @@ if __name__ == "__main__":
     model.train_explanator(ds)
 
     #model.evaluate_classifier(ds)
+
+    #model.predict_single("A young boy in a field of flowers carrying a ball.</s>boy leaving baseball game")

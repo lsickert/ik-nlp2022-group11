@@ -23,7 +23,7 @@ def load_data(dataset: str = None):
     '''
     data = load_dataset("esnli")
 
-    proc_data = data.map(add_columns, load_from_cache_file=False, num_proc=4)
+    proc_data = data.map(add_columns, num_proc=4)
     if dataset == None:
         return proc_data
     else:

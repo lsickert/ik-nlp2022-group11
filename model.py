@@ -1,7 +1,7 @@
 import torch
 import os
 
-from transformers import RobertaTokenizerFast, RobertaForSequenceClassification, RobertaForCausalLM, get_scheduler
+from transformers import RobertaTokenizerFast, RobertaForSequenceClassification, RobertaForCausalLM, RobertaModel, get_scheduler
 
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -16,18 +16,7 @@ print(device)
 
 def train_classifier(dataset):
 
-    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
-
-    def tokenize(examples):
-        tokens = tokenizer(examples["premise_hypothesis"],
-                           padding="max_length", max_length=250, truncation=True)
-        tokens["labels"] = examples["label"]
-        return tokens
-
-    tokenized_dataset = dataset["train"].map(
-        tokenize, batched=True, load_from_cache_file=False, num_proc=4, remove_columns=dataset["train"].column_names)
-    tokenized_dataset.set_format(
-        "torch", columns=['input_ids', 'attention_mask', 'labels'])
+    tokenized_dataset = __classifier_tokenize(dataset["train"])
 
     train_dataloader = DataLoader(
         tokenized_dataset, shuffle=True, batch_size=32)
@@ -71,18 +60,7 @@ def train_classifier(dataset):
 
 def evaluate_classifier(dataset):
 
-    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
-
-    def tokenize(examples):
-        tokens = tokenizer(examples["premise_hypothesis"],
-                           padding="max_length", max_length=250, truncation=True)
-        tokens["labels"] = examples["label"]
-        return tokens
-
-    tokenized_dataset = dataset["test"].map(
-        tokenize, batched=True, load_from_cache_file=False, num_proc=4, remove_columns=dataset["test"].column_names)
-    tokenized_dataset.set_format(
-        "torch", columns=['input_ids', 'attention_mask', 'labels'])
+    tokenized_dataset = __classifier_tokenize(dataset["test"])
 
     eval_dataloader = DataLoader(
         tokenized_dataset, batch_size=32)
@@ -109,63 +87,57 @@ def evaluate_classifier(dataset):
 
         logits = outputs.logits
 
-        nli_pred.extend(torch.argmax(logits, dim=-1))
+        nli_pred.extend(torch.argmax(logits, dim=-1).tolist())
 
         nli_gold.extend(batch["labels"])
 
         progress_bar.update(1)
 
-    print(classification_report(y_pred=nli_pred, y_true=nli_gold, target_names=["entailment", "neutral", "contradiction"]))
+    print(classification_report(y_pred=nli_pred, y_true=nli_gold,
+          target_names=["entailment", "neutral", "contradiction"]))
 
 
 def train_explanator(dataset):
 
     tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
 
-    classifier_model = RobertaForSequenceClassification.from_pretrained(
-        "./models/classifier", num_labels=3)
+    classifier_model = RobertaModel.from_pretrained(
+        "./models/classifier")
     classifier_model.to(device)
 
     def tokenize(examples):
         processed = {}
         tokens = tokenizer(examples["premise_hypothesis"], padding="max_length",
-                           max_length=250, truncation=True, return_tensors="pt")
+                           max_length=193, truncation=True, return_tensors="pt")
 
         processed["labels"] = tokenizer(examples["explanation_1"], padding="max_length",
-                                        max_length=250, truncation=True)["input_ids"]
-        
+                                        max_length=193, truncation=True)["input_ids"]
+
         tokens = {k: v.to(classifier_model.device) for k, v in tokens.items()}
 
-        encoder_output =  classifier_model(
-            **tokens, output_hidden_states=True)["hidden_states"]
-        processed["encoder_hidden_states"] = encoder_output[-1].cpu().detach().numpy()
-        processed["inputs_embeds"] = encoder_output[0].cpu().detach().numpy()
+        encoder_output = classifier_model(
+            **tokens, output_hidden_states=True)
+        processed["encoder_hidden_states"] = encoder_output.last_hidden_state.cpu(
+        ).detach().numpy()
+        processed["input_ids"] = tokens["input_ids"].cpu(
+        ).detach().numpy()
+        processed["encoder_attention_mask"] = tokens["attention_mask"].cpu(
+        ).detach().numpy()
         return processed
 
-    tokenized_dataset = dataset["train"].map(
+    tokenized_dataset = dataset["train"].select(range(100000)).map(
         tokenize, batched=True, batch_size=32, load_from_cache_file=False, remove_columns=dataset["train"].column_names)
     tokenized_dataset.set_format(
-        "torch", columns=['encoder_hidden_states', 'labels', "inputs_embeds"])
-    
-    def collator(batch):
-        new_batch = {}
-        for sample in batch:
-            sample["encoder_hidden_states"] = torch.stack(sample["encoder_hidden_states"])
-            sample["inputs_embeds"] = torch.stack(sample["inputs_embeds"])
-
-        new_batch["labels"] = torch.stack([s["labels"] for s in batch])
-        new_batch["encoder_hidden_states"] = torch.stack([s["encoder_hidden_states"] for s in batch])
-        new_batch["inputs_embeds"] = torch.stack([s["inputs_embeds"] for s in batch])
-        return new_batch
+        "torch", columns=['encoder_hidden_states', 'encoder_attention_mask', 'labels', "input_ids"])
 
     train_dataloader = DataLoader(
-        tokenized_dataset, shuffle=True, batch_size=32, collate_fn=collator)
+        tokenized_dataset, shuffle=True, batch_size=32, collate_fn=__explanation_collator)
 
     explanation_model = RobertaForCausalLM.from_pretrained(
         "roberta-base", is_decoder=True, add_cross_attention=True)
     explanation_model.to(device)
 
-    optimizer = AdamW(explanation_model.parameters(), lr=5e-5)
+    optimizer = AdamW(explanation_model.parameters(), lr=1e-5)
 
     num_epochs = 3
 
@@ -180,6 +152,7 @@ def train_explanator(dataset):
     explanation_model.train()
 
     for epoch in range(num_epochs):
+        batch_c = 0
         for batch in train_dataloader:
             batch = {k: v.to(device) for k, v in batch.items()}
             outputs = explanation_model(**batch)
@@ -189,11 +162,97 @@ def train_explanator(dataset):
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
+            progress_bar.set_postfix({"loss": loss.item()})
             progress_bar.update(1)
+
+            if(batch_c == 50):
+                tqdm.write(f"loss: {loss.item()}")
+                batch_c = 0
+            else:
+                batch_c += 1
 
     __check_dir_exists("models")
 
     explanation_model.save_pretrained("./models/explanator")
+
+
+def predict_single(sentence):
+
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    class_tokens = tokenizer(sentence, padding="max_length",
+                             max_length=125, truncation=True, return_tensors="pt")
+
+    classifier_model = RobertaForSequenceClassification.from_pretrained(
+        "./models/classifier", num_labels=3)
+    classifier_model.to(device)
+
+    class_tokens.to(device)
+
+    with torch.no_grad():
+
+        class_outputs = classifier_model(
+            **class_tokens, output_hidden_states=True)
+
+    logits = class_outputs.logits
+
+    pred = torch.argmax(logits, dim=-1).item()
+
+    print(f"classification: {pred}")
+
+    expl_tokens = {}
+    expl_tokens["encoder_hidden_states"] = class_outputs["hidden_states"][-1].cpu().detach()
+    expl_tokens["inputs_embeds"] = class_outputs["hidden_states"][0].cpu().detach()
+
+    explanation_model = RobertaForCausalLM.from_pretrained(
+        "./models/explanator")
+    explanation_model.to(device)
+
+    with torch.no_grad():
+
+        outputs = explanation_model(**expl_tokens)
+
+        out_tokens = torch.argmax(outputs.logits, dim=2)
+
+        # for token in out_tokens[0]:
+        #max_val = np.argmax(token)
+        # print(tokenizer.decode(max_val))
+
+    print(tokenizer.batch_decode(out_tokens, skip_special_tokens=True))
+
+
+def __explanation_collator(batch):
+    new_batch = {}
+    for sample in batch:
+        sample["encoder_hidden_states"] = torch.stack(
+            sample["encoder_hidden_states"])
+
+    new_batch["labels"] = torch.stack([s["labels"] for s in batch])
+    new_batch["encoder_hidden_states"] = torch.stack(
+        [s["encoder_hidden_states"] for s in batch])
+    new_batch["input_ids"] = torch.stack(
+        [s["input_ids"] for s in batch])
+    new_batch["encoder_attention_mask"] = torch.stack(
+        [s["encoder_attention_mask"] for s in batch])
+    return new_batch
+
+
+def __classifier_tokenize(dataset):
+
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    def tokenize(examples):
+        tokens = tokenizer(examples["premise_hypothesis"],
+                           padding="max_length", max_length=125, truncation=True)
+        tokens["labels"] = examples["label"]
+        return tokens
+
+    tokenized_dataset = dataset.map(
+        tokenize, batched=True, num_proc=4, remove_columns=dataset.column_names)
+    tokenized_dataset.set_format(
+        "torch", columns=['input_ids', 'attention_mask', 'labels'])
+
+    return tokenized_dataset
 
 
 def __check_dir_exists(dir: str):
