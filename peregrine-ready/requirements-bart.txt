@@ -1,0 +1,8 @@
+YOU CAN IGNORE THIS FILE, REQUIREMENTS HAVE BEEN UPDATED IN REQUIREMENTS.TXT
+
+!pip install transformers sentencepiece torch datasets
+!pip install numpy
+!pip install tensorflow
+!pip install nltk
+!pip install rouge_score
+!pip install sklearn
