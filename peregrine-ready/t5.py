@@ -14,7 +14,7 @@ import nltk
 nltk.download("punkt", quiet=True)
 from sklearn.metrics import classification_report
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
 import random as python_random
 import datasets
 
@@ -29,7 +29,7 @@ from transformers import (
 
 # Make reproducible as much as possible
 np.random.seed(1234)
-tf.random.set_seed(1234)
+#tf.random.set_seed(1234)
 python_random.seed(1234)
 seed = 1234
 
