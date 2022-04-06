@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=64GB
-#SBATCH --job-name=train_nli_bart_model
+#SBATCH --job-name=train_nli_t5_model
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=l.m.sickert@student.rug.nl
 
