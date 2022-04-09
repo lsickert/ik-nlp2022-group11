@@ -1,8 +1,11 @@
 datasets
 jupyter
+nltk
 numpy
 pandas
+rouge_score
 sentencepiece
+sklearn
 torch
 tqdm
 transformers

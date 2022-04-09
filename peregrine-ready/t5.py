@@ -280,6 +280,8 @@ def main():
     # Evaluating on our validation set
     trainer.evaluate()
 
+    trainer.save_model(output_dir="./t5")
+
     # Evaluate on our test set
     test_in, test_out = prepare_test(test_dict)
     predictions_after_tuning = generate_predictions(model,test_dict)[1]

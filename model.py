@@ -53,7 +53,7 @@ def train_classifier(dataset):
 
     __check_dir_exists("models")
 
-    model.save_pretrained("./models/classifier")
+    model.save_pretrained("./models/classifier_expl")
 
     evaluate_classifier(dataset)
 
@@ -66,7 +66,7 @@ def evaluate_classifier(dataset):
         tokenized_dataset, batch_size=32)
 
     model = RobertaForSequenceClassification.from_pretrained(
-        "./models/classifier", num_labels=3)
+        "./models/classifier_expl", num_labels=3)
 
     model.to(device)
 
@@ -203,16 +203,17 @@ def predict_single(sentence):
     expl_tokens = {}
     expl_tokens["encoder_hidden_states"] = class_outputs["hidden_states"][-1].cpu().detach()
     expl_tokens["inputs_embeds"] = class_outputs["hidden_states"][0].cpu().detach()
+    #expl_tokens["input_ids"] = class_tokens["input_ids"]
+    #expl_tokens["encoder_attention_mask"] = class_tokens["attention_mask"]
 
     explanation_model = RobertaForCausalLM.from_pretrained(
         "./models/explanator")
     explanation_model.to(device)
 
-    with torch.no_grad():
 
-        outputs = explanation_model(**expl_tokens)
+    outputs = explanation_model(**expl_tokens)
 
-        out_tokens = torch.argmax(outputs.logits, dim=2)
+    out_tokens = torch.argmax(outputs.logits, dim=2)
 
         # for token in out_tokens[0]:
         #max_val = np.argmax(token)
@@ -242,8 +243,8 @@ def __classifier_tokenize(dataset):
     tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
 
     def tokenize(examples):
-        tokens = tokenizer(examples["premise_hypothesis"],
-                           padding="max_length", max_length=125, truncation=True)
+        tokens = tokenizer(examples["prem_hypo_expl"],
+                           padding="max_length", max_length=250, truncation=True)
         tokens["labels"] = examples["label"]
         return tokens
 
