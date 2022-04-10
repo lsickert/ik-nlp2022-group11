@@ -90,7 +90,7 @@ Important: in order to use your own data, you need to keep the variables the sam
 Now that you have changed the path to the model data, you need to initialize the pre-trained model and tokenzier. This can be achieved by changing the following lines:
 
 ```python
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 tokenizer = AutoTokenizer.from_pretrained('facebook/bart-base')
 model = AutoModelForSeq2SeqLM.from_pretrained('facebook/bart-base')
 ```
