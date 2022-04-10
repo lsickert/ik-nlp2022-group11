@@ -95,21 +95,24 @@ tokenizer = AutoTokenizer.from_pretrained('facebook/bart-base')
 model = AutoModelForSeq2SeqLM.from_pretrained('facebook/bart-base')
 ```
 
+**Note: we strongly advice to use the scripts in the [model_training](model_training) directory for training on your own dataset as these files evaluate automatically as well.**
+
 ## GitHub Structure
 
 We have divided our GitHub repository into three main directories, which are listed below.
 
 ````
 .
-├── data_analysis                           # scripts used for data analysis
-│   ├── pickles                             # pickle files used for data analysis
-        ├── ...                   
+├── data_analysis                           # scripts used for data analysis                  
 │   ├── Files used for Data analysis      
 ├── model_training                    
 │   ├── explain_from_classification         # Model training scripts for the Explain from Classification task      
 │   ├── predict_and_explain                 # Model training scripts for the Predict and Explain task
 │   └── predict_using_explanations          # Model training scripts for the Predict using Explanations task
-├── peregrine_scripts                       # Peregrine job script                     
+├── model_evaluation                        # Directiory that contains model evaluation notebooks and files
+│   └── pickles                             # Pickles that hold the data to evaluate
+│   └── Evaluation notebooks.ipynb  
+├── peregrine_job.sh                        # Peregrine job script                     
 ├── .gitignore                    
 ├── .pylintrc                   
 ├── LICENSE
