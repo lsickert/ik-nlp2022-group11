@@ -46,6 +46,12 @@ by using the following link:
 TODO:
 [Pre-trained Models](google colab link)
 
+### Predicting on Unseen Data
+Finally, it is possible to use one of our pre-trained models to predict on unseen data.
+The exact way of working depends on the type of model, examples
+
+TODO
+
 ## GitHub Structure
 We have divided our GitHub repository into three main directories, which are listed below.
 
