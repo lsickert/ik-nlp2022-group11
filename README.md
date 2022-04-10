@@ -3,7 +3,7 @@
 **Project 5: Evaluating Human Explanations in Natural Language Inference**
 
 TODO:
-[Project Report](www.google.com)
+[Project Report](NLP_Final_Paper.pdf)
 
 ## Group information
 
