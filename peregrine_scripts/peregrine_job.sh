@@ -21,4 +21,5 @@ source /data/$USER/.envs/ik_nlp/bin/activate
 # move the cached datasets to the /scratch directory so that we have more space available
 export HF_DATASETS_CACHE="/scratch/$USER/.cache/huggingface/datasets"
 
+# Change this to the correct file name
 python -u model_training/predict_and_explain/t5.py
