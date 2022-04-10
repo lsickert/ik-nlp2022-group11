@@ -2,6 +2,7 @@ from datasets import load_dataset
 
 text_labels = ["entailment", "neutral", "contradiction"]
 
+
 def add_columns(row):
     row["text_label"] = text_labels[row["label"]]
     row["premise_hypothesis"] = f'{row["premise"]}</s>{row["hypothesis"]}'

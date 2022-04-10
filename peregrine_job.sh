@@ -18,6 +18,7 @@ module load PyTorch/1.6.0-fosscuda-2019b-Python-3.7.4
 
 source /data/$USER/.envs/ik_nlp/bin/activate
 
+# move the cached datasets to the /scratch directory so that we have more space available
 export HF_DATASETS_CACHE="/scratch/$USER/.cache/huggingface/datasets"
 
-python -u main.py
+python -u model_training/predict_and_explain/t5.py
