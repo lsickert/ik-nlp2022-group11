@@ -38,6 +38,8 @@ For each of these sub-tasks, we have created a directory which can be found in t
 
 In order to train the models on the peregrine cluster, the provided jobscript `peregrine_script.sh` can be used by replacing the last line in the script with the respective model to be trained.
 
+All scripts for the sub-tasks are automatically evaluated and output the relevant evaluation metrics.
+
 ### Dependencies
 
 All dependecies needed to run our scripts can be installed by running the following command:
@@ -55,10 +57,37 @@ TODO:
 [Pre-trained Models](google colab link)
 
 ### Predicting on Unseen Data
-Finally, it is possible to use one of our pre-trained models to predict on unseen data.
-The exact way of working depends on the type of model, examples
+In order to user our pre-trained models on your own custom dataset, you can use the training scripts 
+that can be found in the directories of our sub-tasks.
 
-TODO
+There are two main things to keep in mind when running on your own dataset:
+
+**1: Change the data source**
+
+The models have been trained on the [E-SNLI](https://huggingface.co/datasets/esnli) dataset, loaded from hugginface. Therefore, when using your own data, you have to make sure that it contains the following columns:
+```
+premise (string)	hypothesis (string)	label (class label)	explanation_1 (string)
+```
+Detailed information about the columns can be found [here](https://huggingface.co/datasets/esnli).
+
+You can load in your own data by using any of the scripts in the sub-task directories and changing  the following lines:
+```python
+from transformers import datasets
+# Loading the E-SNLI dataset from HuggingFace
+train = datasets.load_dataset('esnli', split='train').shuffle(seed)
+val = datasets.load_dataset('esnli', split='validation').shuffle(seed)
+test = datasets.load_dataset('esnli', split='test').shuffle(seed)
+```
+Important: in order to use your own data, you need to keep the variables the same name.
+
+**2: Load in your/our custom pre-trained model**
+
+Now that you have changed the path to the model data, you need to initialize the pre-trained model and tokenzier. This can be achieved by changing the following lines:
+```python
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained('facebook/bart-base')
+model = AutoModelForSeq2SeqLM.from_pretrained('facebook/bart-base')
+```
 
 ## GitHub Structure
 
