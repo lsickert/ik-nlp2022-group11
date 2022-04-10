@@ -9,3 +9,4 @@ sklearn
 torch
 tqdm
 transformers
+matplotlib

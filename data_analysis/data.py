@@ -1,3 +1,5 @@
+# This file was used as an initial data inspection.
+
 from datasets import load_dataset
 
 text_labels = ["entailment", "neutral", "contradiction"]

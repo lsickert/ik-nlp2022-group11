@@ -101,7 +101,8 @@ We have divided our GitHub repository into three main directories, which are lis
 
 ````
 .
-├── data_analysis                           # Files used for data analysis              
+├── data_analysis                           # scripts used for data analysis
+|   ├── pickles                             # pickle files used for data analysis           
 ├── model_training                    
 │   ├── explain_from_classification         # Model training scripts for the Explain from Classification task      
 │   ├── predict_and_explain                 # Model training scripts for the Predict and Explain task
