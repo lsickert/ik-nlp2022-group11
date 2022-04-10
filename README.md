@@ -1,8 +1,6 @@
 # Natural Language Processing : Final Project
 
-![alt text](rug-logo.png "Logo Title Text 1")
-
-####Project 5: Evaluating Human Explanations in Natural Language Inference
+**Project 5: Evaluating Human Explanations in Natural Language Inference**
 
 [Project Report](www.google.com)
 
