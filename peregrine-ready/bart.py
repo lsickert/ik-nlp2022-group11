@@ -19,9 +19,12 @@ import nltk
 nltk.download("punkt", quiet=True)
 from sklearn.metrics import classification_report
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
 import random as python_random
 import datasets
+
+from torch.utils.data import DataLoader
+import torch
 
 from transformers import (
     AutoModelForSeq2SeqLM,
@@ -34,7 +37,7 @@ from transformers import (
 
 # Make reproducible as much as possible
 np.random.seed(1234)
-tf.random.set_seed(1234)
+#tf.random.set_seed(1234)
 python_random.seed(1234)
 seed = 1234
 
@@ -171,17 +174,35 @@ def prepare_test(td):
 
     return tok_inputs, tok_outputs
 
-def generate_predictions(model, input, output):
+def generate_predictions(model, test_dict):
     """
     Function that is used to obtain the test predictions and metrics
     """
-    # Obtain iput ids and attention mask
-    input_ids = input.input_ids.to(model.device)
-    attention_mask = input.attention_mask.to(model.device)
-    # Use the trained model to generate outputs using the input ids and AM
-    test_outputs = model.generate(input_ids, attention_mask=attention_mask)
 
-    print('Test Rouge scores:', compute_metrics((test_outputs.cpu(), output.input_ids.cpu())))
+    test_data = test_dict.map(
+        lambda batch: batch_tokenize_preprocess(
+            batch, tokenizer, max_input_length, max_output_length
+        ),
+        batched=True,
+        remove_columns=test_dict.column_names,
+    )
+    test_data.set_format("torch")
+
+    dataloader = DataLoader(
+        test_data, batch_size=32)
+
+    # Use the trained model to generate outputs using the input ids and AM
+    outputs = []
+    for batch in dataloader:
+
+        # Obtain iput ids and attention mask
+        input_ids = batch["input_ids"].to(model.device)
+        attention_mask = batch["attention_mask"].to(model.device)
+
+        outputs.append(model.generate(input_ids, attention_mask=attention_mask))
+
+    test_outputs = torch.cat(outputs, dim=0)
+    print('Test Rouge scores:', compute_metrics((test_outputs.cpu().detach(), test_data["labels"].cpu().detach())))
 
     # Coverts output_ids back to string representation using the decode
     output_str = tokenizer.batch_decode(test_outputs, skip_special_tokens=True)
@@ -195,7 +216,7 @@ def main():
     """
     # Loading the E-SNLI dataset from HuggingFace
     # 100000, 5000, 5000 -> should be full van and test in the end
-    train = datasets.load_dataset('esnli', split='train[:100000]').shuffle(seed)
+    train = datasets.load_dataset('esnli', split='train[:200000]').shuffle(seed)
     val = datasets.load_dataset('esnli', split='validation').shuffle(seed)
     test = datasets.load_dataset('esnli', split='test').shuffle(seed)
 
@@ -264,9 +285,11 @@ def main():
     # Evaluating on our validation set
     trainer.evaluate()
 
+    trainer.save_model(output_dir="./bart")
+
     # Evaluate on our test set
     test_in, test_out = prepare_test(test_dict)
-    predictions_after_tuning = generate_predictions(model, test_in, test_out)[1]
+    predictions_after_tuning = generate_predictions(model,test_dict)[1]
 
     # Printing the first 10 test predictions
     for idx, i in enumerate(predictions_after_tuning[:10]):

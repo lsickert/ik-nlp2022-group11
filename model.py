@@ -1,7 +1,7 @@
 import torch
 import os
 
-from transformers import RobertaTokenizerFast, RobertaForSequenceClassification, RobertaForCausalLM, RobertaModel, get_scheduler
+from transformers import RobertaTokenizerFast, RobertaForSequenceClassification, RobertaForCausalLM, RobertaModel, AutoTokenizer, AutoModelForSeq2SeqLM, get_scheduler
 
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -12,6 +12,82 @@ from sklearn.metrics import classification_report
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
+
+
+def train_bart_classifier(dataset):
+
+    bartTokenizer = AutoTokenizer.from_pretrained('./models/bart')
+    explModel = AutoModelForSeq2SeqLM.from_pretrained('./models/bart')
+    explModel.to(device)
+
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    def tokenize(examples):
+
+        tokens = bartTokenizer(examples["premise_hypothesis"], padding="max_length",
+                               max_length=125, truncation=True, return_tensors="pt")
+
+        input_ids = tokens["input_ids"].to(explModel.device)
+        attention_mask = tokens["attention_mask"].to(explModel.device)
+
+        expl_outputs = explModel.generate(
+            input_ids, attention_mask=attention_mask)
+
+        expl_output_str = tokenizer.batch_decode(
+            expl_outputs, skip_special_tokens=True)
+
+        expl_input = [s[1:] for s in expl_output_str]
+
+        processed = tokenizer(expl_input, padding="max_length",
+                              max_length=193, truncation=True)
+
+        processed["labels"] = examples["label"]
+
+        return processed
+
+    model = RobertaForSequenceClassification.from_pretrained(
+        "roberta-base", num_labels=3)
+    model.to(device)
+
+    tokenized_dataset = dataset["train"].select(range(64)).map(
+        tokenize, batched=True, batch_size=32, load_from_cache_file=False, remove_columns=dataset["train"].column_names)
+    tokenized_dataset.set_format(
+        "torch", columns=['input_ids', 'attention_mask', 'labels'])
+
+    train_dataloader = DataLoader(
+        tokenized_dataset, shuffle=True, batch_size=32)
+
+    optimizer = AdamW(model.parameters(), lr=5e-5)
+
+    num_epochs = 3
+
+    num_training_steps = num_epochs * len(train_dataloader)
+
+    lr_scheduler = get_scheduler(
+        name="linear", optimizer=optimizer, num_warmup_steps=0, num_training_steps=num_training_steps
+    )
+
+    progress_bar = tqdm(range(num_training_steps))
+
+    model.train()
+
+    for epoch in range(num_epochs):
+        for batch in train_dataloader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            loss = outputs.loss
+            loss.backward()
+
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+            progress_bar.update(1)
+
+    __check_dir_exists("models")
+
+    model.save_pretrained("./models/classifier_bart_expl")
+
+    evaluate_classifier(dataset)
 
 
 def train_classifier(dataset):
@@ -53,7 +129,7 @@ def train_classifier(dataset):
 
     __check_dir_exists("models")
 
-    model.save_pretrained("./models/classifier")
+    model.save_pretrained("./models/classifier_expl")
 
     evaluate_classifier(dataset)
 
@@ -66,7 +142,7 @@ def evaluate_classifier(dataset):
         tokenized_dataset, batch_size=32)
 
     model = RobertaForSequenceClassification.from_pretrained(
-        "./models/classifier", num_labels=3)
+        "./models/classifier_bart_expl", num_labels=3)
 
     model.to(device)
 
@@ -203,20 +279,20 @@ def predict_single(sentence):
     expl_tokens = {}
     expl_tokens["encoder_hidden_states"] = class_outputs["hidden_states"][-1].cpu().detach()
     expl_tokens["inputs_embeds"] = class_outputs["hidden_states"][0].cpu().detach()
+    #expl_tokens["input_ids"] = class_tokens["input_ids"]
+    #expl_tokens["encoder_attention_mask"] = class_tokens["attention_mask"]
 
     explanation_model = RobertaForCausalLM.from_pretrained(
         "./models/explanator")
     explanation_model.to(device)
 
-    with torch.no_grad():
+    outputs = explanation_model(**expl_tokens)
 
-        outputs = explanation_model(**expl_tokens)
+    out_tokens = torch.argmax(outputs.logits, dim=2)
 
-        out_tokens = torch.argmax(outputs.logits, dim=2)
-
-        # for token in out_tokens[0]:
-        #max_val = np.argmax(token)
-        # print(tokenizer.decode(max_val))
+    # for token in out_tokens[0]:
+    #max_val = np.argmax(token)
+    # print(tokenizer.decode(max_val))
 
     print(tokenizer.batch_decode(out_tokens, skip_special_tokens=True))
 
@@ -242,8 +318,8 @@ def __classifier_tokenize(dataset):
     tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
 
     def tokenize(examples):
-        tokens = tokenizer(examples["premise_hypothesis"],
-                           padding="max_length", max_length=125, truncation=True)
+        tokens = tokenizer(examples["prem_hypo_expl"],
+                           padding="max_length", max_length=250, truncation=True)
         tokens["labels"] = examples["label"]
         return tokens
 

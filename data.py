@@ -5,6 +5,7 @@ text_labels = ["entailment", "neutral", "contradiction"]
 def add_columns(row):
     row["text_label"] = text_labels[row["label"]]
     row["premise_hypothesis"] = f'{row["premise"]}</s>{row["hypothesis"]}'
+    row["prem_hypo_expl"] = f'{row["premise"]}</s>{row["hypothesis"]}</s>{row["explanation_1"]}'
     row["label_explanation_1"] = f'{row["text_label"]} {row["explanation_1"]}'
 
     if len(row["explanation_2"]) > 0:
