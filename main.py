@@ -1,4 +1,4 @@
-import data
+from data_analysis import data
 import model
 
 if __name__ == "__main__":
