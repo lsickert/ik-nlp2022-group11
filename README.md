@@ -65,9 +65,12 @@ There are two main things to keep in mind when running on your own dataset:
 **1: Change the data source**
 
 The models have been trained on the [E-SNLI](https://huggingface.co/datasets/esnli) dataset, loaded from hugginface. Therefore, when using your own data, you have to make sure that it contains the following columns:
-```
-premise (string)	hypothesis (string)	label (class label)	explanation_1 (string)
-```
+
+
+premise (string) | hypothesis (string) | label (class label)     | explanation_1 (string)
+---------------- |------------------|-------------------------| ----------
+This church choir sings to the masses ....| The church has cracks in the ceiling.                 | 1 (neutral)             | Not all churches have cracks in the ....
+
 Detailed information about the columns can be found [here](https://huggingface.co/datasets/esnli).
 
 You can load in your own data by using any of the scripts in the sub-task directories and changing  the following lines:
